@@ -1,24 +1,26 @@
-import subprocess as sp  # To use Github API
-import json
+from github import Github # To use Github API
 import csv
 
-# Input
-# A csv file with oauth-tokens on the 1st row and owner/repo's on the others rows
+# Input: A csv file with oauth-tokens on the 1st row and owner/repo's on the others rows
 def input_file():
     with open('input.csv', newline='') as csvfile:
         reader = csv.reader(csvfile)
-        tokens = tuple(reader[0])
-        repo_ls = tuple(reader[1:])
-    return tokens, repo_ls
+        token = reader[0]
+        ownerrepo_ls = tuple(reader[1:])
+    return token, ownerrepo_ls
 
 
-def pr_json(token, repo_ls):
-    pass
+def get_pulls(github_access, ownerrepo):
+    repo = github_access.get_repo(ownerrepo)
+    pulls = repo.get_pulls(state='closed')
+    return pulls
 
 
 def main():
-    TOKENS, REPO_LS = input_file()
-    pr_json(TOKENS, REPO_LS)
+    token, ownerrepo_ls = input_file()
+    g = Github(token)
+    for ownerrepo in ownerrepo_ls:
+        get_pulls(g, ownerrepo)
     pass
 
 
