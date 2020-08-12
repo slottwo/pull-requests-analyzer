@@ -127,6 +127,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-input.csv
-output_by_repo.csv
-output_total.csv
+*.csv
