@@ -3,17 +3,18 @@ import csv
 
 with open('input.csv', newline='') as csvfile:
     csv_reader = list(csv.reader(csvfile))
-    token = csv_reader[0][0]
-    ownerrepo_ls = tuple(csv_reader[1:][0])
+    token = csv_reader[0][0]  # Each row is a list, so a csv file is as a matrix, a list of lists
+    ownerrepo_ls = list()
+    for row in csv_reader[1:]:
+        ownerrepo_ls.append(row[0])
     del csv_reader
-print(token)
-print(ownerrepo_ls)
 
 g = github.Github(token)
 
+total_pr = dict()
 for ownerrepo in ownerrepo_ls:
     pr_analysis = dict()
-    total_pr = {'total_merges': 0, 'total_rebases': 0, 'total_not_merged_pr': 0}
+    total_pr[ownerrepo] = {'total_merges': 0, 'total_rebases': 0, 'total_not_merged_pr': 0}
 
     repo = g.get_repo(ownerrepo)
     pulls = repo.get_pulls(state='closed')
@@ -27,12 +28,12 @@ for ownerrepo in ownerrepo_ls:
             }
             if len(repo.get_commit(pr.merge_commit_sha).commit.parents) > 1:
                 pr_analysis[pr.id]['merge_or_rebase'] = 'merge'
-                total_pr['total_merges'] += 1
+                total_pr[ownerrepo]['total_merges'] += 1
             else:
                 pr_analysis[pr.id]['merge_or_rebase'] = 'rebase'
-                total_pr['total_rebases'] += 1
+                total_pr[ownerrepo]['total_rebases'] += 1
         else:
-            total_pr['total_not_merged_pr'] += 1
+            total_pr[ownerrepo]['total_not_merged_pr'] += 1
 
     with open(ownerrepo.replace('/', '-') + '.csv', 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
@@ -41,13 +42,16 @@ for ownerrepo in ownerrepo_ls:
             csvwriter.writerow(list(pr.values()))
         del csvfile
     
-    with open('total_pr_analysis.csv', 'w', newline='') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.writerow(['owner/repo','total_merges','total_rebases','total_not_merged_pull_requests'])
+    del pulls, repo, pr_analysis
+
+with open('total_pr_analysis.csv', 'w', newline='') as csvfile:
+    csvwriter = csv.writer(csvfile) 
+    csvwriter.writerow(['owner/repo','total_merges','total_rebases','total_not_merged_pull_requests'])
+    for ownerrepo, totals in total_pr.items():
         csvwriter.writerow([
             ownerrepo,
-            total_pr['total_merges'],
-            total_pr['total_rebases'],
-            total_pr['total_not_merged_pr']
+            totals['total_merges'],
+            totals['total_rebases'],
+            totals['total_not_merged_pr']
         ])
-        del csvwriter
+    del csvwriter
