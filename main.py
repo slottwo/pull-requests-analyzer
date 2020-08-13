@@ -1,34 +1,43 @@
 import github  # To use Github API
 import csv  # To manage the input and output
+from sys import exc_info
 
 def input_file():
-    """[summary]
-
+    """Take a csv file from project's root folder named 'input.csv', read it, then return the token (if any) and the full name repositories
+    
     Returns:
-        tuple[str, list]: A token to access the Github API and a list of repositories to be analyzed
+        tuple[str or NoneType, list]: A token to access the Github API and a list of repositories to be analyzed
     """
-    with open('input.csv', newline='') as file:
-        reader = list(csv.reader(file))
-        if '/' in reader[0][0]:
-            token = None
-            full_name_repo_ls = [x[0] for x in reader]
-        else:
-            token = reader[0][0]
-            full_name_repo_ls = [x[0] for x in reader[1:]]
+    try:
+        with open('input.csv', newline='') as file:
+            reader = list(csv.reader(file))
+            if '/' in reader[0][0]:
+                token = None
+                full_name_repo_ls = [x[0] for x in reader]
+            else:
+                token = reader[0][0]
+                full_name_repo_ls = [x[0] for x in reader[1:]]
+    except FileNotFoundError:
+        print('Error: Input file (input.csv) not found! See <https://github.com/slottwo/pull-request-analyzer> to more information.')
+        exit()
+    except:
+        print('Unexpected error:', exc_info()[0])
+        print('Please report in: <https://github.com/slottwo/pull-requests-analyzer/issues>.')
+        exit()
     return token, full_name_repo_ls
 
 
-def output(file_name: str, title_row: list, new_rows: list):
-    """[summary]
+def csv_output(file_name: str, title_row: list, new_rows: list):
+    """It opens (or creates), writes (adding new lines) and closes a csv file
 
     Args:
-        file_name (str): [description]
-        title_row (list): [description]
-        new_rows (list): [description]
+        file_name (str): Output file name withoud extension
+        title_row (list): Row with the label of each column
+        new_rows (list): New rows to be added
     """
     old_rows = []
 
-    with open(file_name, 'w', newline='') as file:
+    with open(file_name + '.csv', 'w', newline='') as file:
         # Reading
         reader = csv.reader(file)
         if reader.line_num != 0:  # Checks whether the file is not empty
@@ -43,35 +52,35 @@ def output(file_name: str, title_row: list, new_rows: list):
         writer.writerows(rows)
 
 def output_by_repo(full_name: str, pr_analyses: list):
-    """[summary]
+    """Create a file named with the repository full_name 
 
     Args:
-        full_name (str): [description]
-        pr_analysis (list[dict]): [description]
+        full_name (str): Repository full name in format 'owner/repo'
+        pr_analysis (list[dict]): Pull requests analyses
     """
-    file_name = full_name.replace('/', '_')+'.csv'
+    file_name = full_name.replace('/', '_')
     title_row = ['merged_commit_sha','base_sha','date','merge_or_rebase']
     new_rows = [list(pr_analysis.values()) for pr_analysis in pr_analyses]
-    output(file_name, title_row, new_rows)
+    csv_output(file_name, title_row, new_rows)
 
 
 def output_total(total_ls: list):
-    """[summary]
+    """Create a csv file named "total_output.csv" with the total values to each repository
 
     Args:
-        total_ls (list): [description]
+        total_ls (list[dict]): A list of dict with all analized repositories and your respective number total of merges, rebases and not merged pull requests
     """
-    file_name = 'total_output.csv'
+    file_name = 'total_output'
     title_row = ['repository','total_merges','total_rebases','total_not_merged_pull_requests']
     new_rows = list(map(lambda d: d.values(), total_ls))
-    output(file_name, title_row, new_rows)
+    csv_output(file_name, title_row, new_rows)
 
 
 def get_integrated_pulls(repository: github.Repository.Repository, show_not_merged: bool = True):
-    """[summary]
+    """Receives all integrated pull requests from a repository. And, optionally, count the non-integrated ones.
 
     Args:
-        repository (github.Repository.Repository): [description]
+        repository (github.Repository.Repository): Repository to recive pull requests from it
         show_not_merged (bool): Returns additionally the number of non-integrated pull requests
 
     Returns:
@@ -94,14 +103,14 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
 
 
 def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullRequest):
-    """[summary]
+    """Checks if the pull in question is the result of a rebase method according to the number of parents of your commit. If it is more than one, it is the result of a merge
 
     Args:
-        repo (github.Repository.Repository): [description]
-        pull (github.PullRequest.PullRequest): [description]
+        repo (github.Repository.Repository): Pull-Request's repository
+        pull (github.PullRequest.PullRequest): Pull-Request to be checked
 
     Returns:
-        [type]: [description]
+        bool: Whether it's the result of rebase or merge method
     """
     return len(repo.get_commit(pull.merge_commit_sha).commit.parents) == 1
 

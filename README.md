@@ -6,7 +6,7 @@ This project is under development, and may gain new features or change drastical
 
 ## **Requirements**
 
-This script uses [Github API v3](https://developer.github.com/v3/) through the Python library [PyGithub](https://pygithub.readthedocs.io/en/latest/introduction.html). To install it use:
+This script uses [Python 3.x](https://www.python.org/) and [Github API v3](https://developer.github.com/v3/) through the Python library [PyGithub](https://pygithub.readthedocs.io/en/latest/introduction.html). To install it use:
 
 ```$ pip install PyGithub```
 
@@ -14,7 +14,7 @@ Or clone it on [Github](https://github.com/PyGithub/PyGithub).
 
 ## **Usage**
 
-It cab be used a script or as a lib in another projects. You will need use a github [personal access token](https://github.com/settings/tokens) if you want to analyze private repository that  require authentication or many repositories at once, because as the Github API imposes a lower hourly request limit without the token.
+It cab be used a script or as a lib in another projects. You will need use a github [personal access token](https://github.com/settings/tokens) if you want to analyze private repository that  require authentication or many repositories at once, because as the Github API imposes a lower hourly request limit without the token. (60/hour without a token and 5000 with a token)
 
 ### **Inputting method**
 
