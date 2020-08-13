@@ -1,1 +1,36 @@
-# analise-pull-requests
+# PRA - Pull Request Analyzer
+
+A simple Python script to measure how many Pull-Requests are products of merge or rebase integration methods, and thus help in understanding the software repositories on Github.
+
+This project is under development, and may gain new features or change drastically, but trying to keep it simple
+
+## **Requirements**
+
+This script uses [Github API v3](https://developer.github.com/v3/) through the Python library [PyGithub](https://pygithub.readthedocs.io/en/latest/introduction.html). To install it use:
+
+```$ pip install PyGithub```
+
+Or clone it on [Github](https://github.com/PyGithub/PyGithub).
+
+## **Usage**
+
+It cab be used a script or as a lib in another projects. You will need use a github [personal access token](https://github.com/settings/tokens) if you want to analyze private repository that  require authentication or many repositories at once, because as the Github API imposes a lower hourly request limit without the token.
+
+### **Inputting method**
+
+Create a [CSV](https://pt.wikipedia.org/wiki/Comma-separated_values) file named *input* in the project's root folder, it must be in the format below:
+
+```csv
+OUATH-TOKEN
+owner1/repo1
+owner2/repo2
+owner3/repo3
+owner4/repo4
+...
+```
+
+> Note: You can analyze different repositories from different owners simultaneously
+
+Then run the program:
+
+```$ python main.py```
