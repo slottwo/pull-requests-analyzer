@@ -120,11 +120,12 @@ def main():
             pull_analyses.append(pull_analysis)
         total.append({
             'full_name': full_name,
-            'total_merges': sum(map(lambda x: int('merges' in x.values()), pull_analyses)),
-            'total_rebases': sum(map(lambda x: int('rebases' in x.values()), pull_analyses)),
+            'total_merges': sum(map(lambda x: int('merge' in x.values()), pull_analyses)),
+            'total_rebases': sum(map(lambda x: int('rebase' in x.values()), pull_analyses)),
             'total_not_merged_pr': not_merged_pr_count
         })
         output_by_repo(full_name, pull_analyses)
+        print(total)
     output_total(total)
 
 
