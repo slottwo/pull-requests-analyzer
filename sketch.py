@@ -15,12 +15,11 @@ total_pr = dict()
 for ownerrepo in ownerrepo_ls:
     pr_analysis = dict()
     total_pr[ownerrepo] = {'total_merges': 0, 'total_rebases': 0, 'total_not_merged_pr': 0}
-
     repo = g.get_repo(ownerrepo)
     pulls = repo.get_pulls(state='closed')
     
     for pr in pulls:
-        if pr.is_merged:
+        if pr.merged_at != None:
             pr_analysis[pr.id] = {
                 'merge_commit_sha': pr.merge_commit_sha,
                 'base_sha': pr.base.sha,
