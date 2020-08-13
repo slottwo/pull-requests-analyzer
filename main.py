@@ -9,8 +9,12 @@ def input_file():
     """
     with open('input.csv', newline='') as file:
         reader = list(csv.reader(file))
-        token = reader[0][0]
-        full_name_repo_ls = [x[0] for x in reader[1:]]
+        if '/' in reader[0][0]:
+            token = None
+            full_name_repo_ls = [x[0] for x in reader]
+        else:
+            token = reader[0][0]
+            full_name_repo_ls = [x[0] for x in reader[1:]]
     return token, full_name_repo_ls
 
 
@@ -104,7 +108,10 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
 
 def main():
     token, full_name_repo_ls = input_file()
-    g = github.Github(token)
+    if token:
+        g = github.Github(token)
+    else:
+        g = github.Github()
     total = list()
     for full_name in full_name_repo_ls:
         repo = g.get_repo(full_name)

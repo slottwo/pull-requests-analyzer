@@ -1,4 +1,4 @@
-# PRA - Pull Request Analyzer
+# PRA - Pull Requests Analyzer
 
 A simple Python script to measure how many Pull-Requests are products of merge or rebase integration methods, and thus help in understanding the software repositories on Github.
 
