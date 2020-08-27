@@ -2,6 +2,7 @@ import github  # To use Github API
 import csv  # To manage the input and output
 from sys import exc_info
 
+
 def input_file():
     """Take a csv file from project's root folder named 'input.csv', read it, then return the token (if any) and the full name repositories
     
@@ -51,6 +52,7 @@ def csv_output(file_name: str, title_row: list, new_rows: list):
                 rows.append(row)
         writer.writerows(rows)
 
+
 def output_by_repo(full_name: str, pr_analyses: list):
     """Create a file named with the repository full_name 
 
@@ -91,15 +93,17 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
     # if show_not_merged:
     #     return pulls
     # return pulls, len(filter(lambda pull: pull.merged_at == None, repository.get_pulls(state='closed')))
-    pulls = list(repository.get_pulls(state='closed'))
+    closed_pulls = list(repository.get_pulls(state='closed'))
+    integrated_pulls = list()
     not_merged_count = 0
-    for pull in pulls:
-        if pull.merged_at == None:
-            pulls.remove(pull)
+    for pull in closed_pulls:
+        if pull.is_merged:
+            integrated_pulls.append(pull)
+        else:
             not_merged_count += 1
     if show_not_merged:
-        return pulls, not_merged_count
-    return pulls
+        return integrated_pulls, not_merged_count
+    return integrated_pulls
 
 
 def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullRequest):
