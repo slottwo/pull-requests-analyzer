@@ -97,7 +97,7 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
     integrated_pulls = list()
     not_merged_count = 0
     for pull in closed_pulls:
-        if pull.is_merged:
+        if pull.merge_commit_sha != None:
             integrated_pulls.append(pull)
         else:
             not_merged_count += 1
@@ -120,15 +120,25 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
 
 
 def main():
+    
+    rl_log = []
+    
     token, full_name_repo_ls = input_file()
     if token:
         g = github.Github(token)
     else:
         g = github.Github()
+    rl_debug(g, 'init', rl_log)
     total = list()
     for full_name in full_name_repo_ls:
         repo = g.get_repo(full_name)
+
+        rl_debug(g, 'getting repo', rl_log)
+        
         pulls, not_merged_pr_count = get_integrated_pulls(repo, show_not_merged=True)
+        
+        rl_debug(g, 'getting pulls', rl_log)
+        
         pull_analyses = []
         for pull in pulls:
             pull_analysis = {
@@ -137,6 +147,9 @@ def main():
                 'date': pull.merged_at,
                 'merge_or_rebase': 'rebase' if is_rebase(repo, pull) else 'merge'
             }
+            
+            rl_debug(g, f'analyzing({pull})', rl_log)
+            
             pull_analyses.append(pull_analysis)
         total.append({
             'full_name': full_name,
@@ -147,6 +160,22 @@ def main():
         output_by_repo(full_name, pull_analyses)
         print(total)
     output_total(total)
+
+    rl_debug(g, 'end', rl_log)
+
+
+def rl_debug(g: github.Github, label: str, rl_log: list):
+    """Rate Limit Debug. Create a csv log
+
+    Args:
+        g (github.Github): [description]
+        label (str): [description]
+    """
+    title_row = ['label', 'limit']
+    limit_now = str(g.rate_limiting[0])
+    print(label + ': ' + limit_now)
+    rl_log.append([label, limit_now])
+    csv_output('rl_log', title_row, rl_log)
 
 
 if __name__ == "__main__":
