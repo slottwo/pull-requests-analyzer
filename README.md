@@ -20,18 +20,17 @@ It cab be used a script or as a lib in another projects. You will need use a git
 
 ### **Inputting method**
 
-Create a [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) file named *input* in the project's root folder, it must be in the format below:
+Create a [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) file named *repositories* and *tokens* (if you'd like use github tokens) in the project's root folder, it must be in the format below:
 
-- With token:
+- **tokens.csv**
 ```csv
-OUATH-TOKEN
-owner1/repo1
-owner2/repo2
-owner3/repo3
-owner4/repo4
+OUATH-TOKEN1
+OUATH-TOKEN2
+OUATH-TOKEN3
 ...
 ```
-- Without token:
+
+- **repositories.csv**
 ```csv
 owner1/repo1
 owner2/repo2

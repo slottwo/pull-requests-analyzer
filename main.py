@@ -1,31 +1,31 @@
 import github  # To use Github API
 import csv  # To manage the input and output
 from sys import exc_info
+from time import sleep, strftime, mktime, localtime, time as now
 
 
-def input_file():
+def input_file(file_name: str):
     """Take a csv file from project's root folder named 'input.csv', read it, then return the token (if any) and the full name repositories
     
     Returns:
-        tuple[str or NoneType, list]: A token to access the Github API and a list of repositories to be analyzed
-    """
+        tuple[list[str], list]: A token to access the Github API and a list of repositories to be analyzed
+    """        
     try:
-        with open('input.csv', newline='') as file:
+        with open(file_name + '.csv', newline='') as file:
             reader = list(csv.reader(file))
-            if '/' in reader[0][0]:
-                token = None
-                full_name_repo_ls = [x[0] for x in reader]
-            else:
-                token = reader[0][0]
-                full_name_repo_ls = [x[0] for x in reader[1:]]
+            full_name_repo_ls = [x[0] for x in reader]
+            
+        with open('tokens.csv', 'w', newline='') as file:  # w flag used to create a new file if there is no
+            reader = list(csv.reader(file))
+            tokens = [x[0] for x in reader]
     except FileNotFoundError:
-        print('Error: Input file (input.csv) not found! See <https://github.com/slottwo/pull-request-analyzer> to more information.')
+        print(f'Error: Input file ({file_name}) not found! See <https://github.com/slottwo/pull-request-analyzer> to more information.')
         exit()
     except:
         print('Unexpected error:', exc_info()[0])
         print('Please report in: <https://github.com/slottwo/pull-requests-analyzer/issues>.')
         exit()
-    return token, full_name_repo_ls
+    return tokens, full_name_repo_ls
 
 
 def csv_output(file_name: str, title_row: list, new_rows: list):
@@ -53,7 +53,7 @@ def csv_output(file_name: str, title_row: list, new_rows: list):
         writer.writerows(rows)
 
 
-def output_by_repo(full_name: str, pr_analyses: list):
+def output_repo(full_name: str, pr_analyses: list):
     """Create a file named with the repository full_name 
 
     Args:
@@ -63,16 +63,16 @@ def output_by_repo(full_name: str, pr_analyses: list):
     file_name = full_name.replace('/', '_')
     title_row = ['merged_commit_sha','base_sha','date','merge_or_rebase']
     new_rows = [list(pr_analysis.values()) for pr_analysis in pr_analyses]
-    csv_output(file_name, title_row, new_rows)
+    csv_output('analyses_per_repository/' + file_name, title_row, new_rows)
 
 
 def output_total(total_ls: list):
     """Create a csv file named "total_output.csv" with the total values to each repository
 
     Args:
-        total_ls (list[dict]): A list of dict with all analized repositories and your respective number total of merges, rebases and not merged pull requests
+        total_ls (list[dict]): A list of dict with all analyzed repositories and your respective number total of merges, rebases and not merged pull requests
     """
-    file_name = 'total_output'
+    file_name = 'total_analysis'
     title_row = ['repository','total_merges','total_rebases','total_not_merged_pull_requests']
     new_rows = list(map(lambda d: d.values(), total_ls))
     csv_output(file_name, title_row, new_rows)
@@ -82,12 +82,12 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
     """Receives all integrated pull requests from a repository. And, optionally, count the non-integrated ones.
 
     Args:
-        repository (github.Repository.Repository): Repository to recive pull requests from it
+        repository (github.Repository.Repository): Repository from which it will to receive pull requests
         show_not_merged (bool): Returns additionally the number of non-integrated pull requests
 
     Returns:
         list[PullRequest]: A list of PullRequests that have been integrated
-        int (opitional): Number of non-integrated pull requests
+        int (optional): Number of non-integrated pull requests
     """
     # pulls = list(filter(lambda pull: pull.merged_at != None, repository.get_pulls(state='closed')))
     # if show_not_merged:
@@ -120,62 +120,55 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
 
 
 def main():
-    
-    rl_log = []
-    
-    token, full_name_repo_ls = input_file()
-    if token:
-        g = github.Github(token)
-    else:
-        g = github.Github()
-    rl_debug(g, 'init', rl_log)
+    tokens, full_name_repo_ls = input_file('repositories')
+    if len(tokens) == 1:
+        g = github.Github(tokens[0])
+    else:  # Comming soon...
+        g = [github.Github(t) for t in tokens]
     total = list()
+    
     for full_name in full_name_repo_ls:
+        # Getting repository as Repository instance 
         repo = g.get_repo(full_name)
-
-        rl_debug(g, 'getting repo', rl_log)
         
+        # Gettings integrated pulls requests list and how many pulls were not
         pulls, not_merged_pr_count = get_integrated_pulls(repo, show_not_merged=True)
         
-        rl_debug(g, 'getting pulls', rl_log)
-        
-        pull_analyses = []
-        for pull in pulls:
-            pull_analysis = {
-                'merged_commit_sha': pull.merge_commit_sha,
-                'base_sha': pull.base.sha,
-                'date': pull.merged_at,
-                'merge_or_rebase': 'rebase' if is_rebase(repo, pull) else 'merge'
-            }
+        if len(pulls)*2 < g.rate_limiting[0]:
+            pull_analyses = []
+            for pull in pulls:
+                pull_analysis = {
+                    'merged_commit_sha': pull.merge_commit_sha,
+                    'base_sha': pull.base.sha,
+                    'date': pull.merged_at,
+                    'merge_or_rebase': 'rebase' if is_rebase(repo, pull) else 'merge'
+                }
+                pull_analyses.append(pull_analysis)
+                if len(pull_analyses) >= 200:
+                    break
             
-            rl_debug(g, f'analyzing({pull})', rl_log)
-            
-            pull_analyses.append(pull_analysis)
-        total.append({
-            'full_name': full_name,
-            'total_merges': sum(map(lambda x: int('merge' in x.values()), pull_analyses)),
-            'total_rebases': sum(map(lambda x: int('rebase' in x.values()), pull_analyses)),
-            'total_not_merged_pr': not_merged_pr_count
-        })
-        output_by_repo(full_name, pull_analyses)
-        print(total)
+            total.append({
+                'full_name': full_name,
+                'total_merges': sum(map(lambda x: int('merge' in x.values()), pull_analyses)),
+                'total_rebases': sum(map(lambda x: int('rebase' in x.values()), pull_analyses)),
+                'total_not_merged_pr': not_merged_pr_count
+            })
+            output_repo(full_name, pull_analyses)
+        else:
+            resettime = g.rate_limiting_resettime
+            formatedresettime = strftime('%Y-%m-%d %H:%M:%S', localtime(resettime))
+            print(f'Limit reached. Do you want to wait until the reset time ({formatedresettime}) or exit?')
+            print('1. Wait')
+            print('2. Exit')
+            while True:
+                o = input('')
+                if o == 1:
+                    sleep((resettime-mktime(now())))
+                    break
+                elif o == 2:
+                    exit()
+
     output_total(total)
-
-    rl_debug(g, 'end', rl_log)
-
-
-def rl_debug(g: github.Github, label: str, rl_log: list):
-    """Rate Limit Debug. Create a csv log
-
-    Args:
-        g (github.Github): [description]
-        label (str): [description]
-    """
-    title_row = ['label', 'limit']
-    limit_now = str(g.rate_limiting[0])
-    print(label + ': ' + limit_now)
-    rl_log.append([label, limit_now])
-    csv_output('rl_log', title_row, rl_log)
 
 
 if __name__ == "__main__":
