@@ -3,6 +3,39 @@ import csv  # To manage the input and output
 from sys import exc_info
 from time import sleep, strftime, mktime, localtime, time as now
 
+class github_access:
+    def __init__(self, tokens: list, wait=False):
+        self.tokens = tokens
+        self.index = 0
+        self.access = github.Github(tokens[0])
+        self.usable_tokens = [bool(github.Github(t).rate_limiting[0]) for t in tokens] 
+        self.wait = wait
+
+    
+    def regenerate(self):
+        self.access = github.Github(self.tokens[self.index])
+
+    
+    def next_access(self):
+        self.index = (self.index + 1) % len(self.tokens)
+
+
+    def check_limit(self, api_requests: int):
+        self.regenerate()
+        if self.access.rate_limiting[0] > api_requests:
+            self.usable_tokens[self.index] = True
+            return True
+        if True in self.usable_tokens:
+            self.usable_tokens[self.index] = False
+            self.next_access()
+            self.check_limit(api_requests)
+        elif self.wait:
+            sleep(self.access.rate_limiting_resettime-now())
+            self.usable_tokens = [bool(github.Github(t).rate_limiting[0]) for t in self.tokens]
+            return True
+        else:
+            return False
+
 
 def input_file(file_name: str):
     """Take a csv file from project's root folder named 'input.csv', read it, then return the token (if any) and the full name repositories
@@ -116,57 +149,69 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
     Returns:
         bool: Whether it's the result of rebase or merge method
     """
-    return len(repo.get_commit(pull.merge_commit_sha).commit.parents) == 1
+    try:
+        commit = repo.get_commit(pull.merge_commit_sha)
+    except:
+        return 'unknown'
+    else:
+        return 'rebase' if len(commit.commit.parents) == 1 else 'merge'
+
+
+def wait(g: github_access):
+    resettime = g.rate_limiting_resettime
+    formatedresettime = strftime('%Y-%m-%d %H:%M:%S', localtime(resettime))
+    print(f'Limit reached. Do you want to wait until the reset time ({formatedresettime}) or exit?')
+    print('1. Wait')
+    print('2. Exit')
+    while True:
+        o = input('')
+        if o == 1:
+            sleep((resettime-mktime(now())))
+            break
+        elif o == 2:
+            exit()
 
 
 def main():
     tokens, full_name_repo_ls = input_file('repositories')
-    if len(tokens) == 1:
-        g = github.Github(tokens[0])
-    else:  # Comming soon...
-        g = [github.Github(t) for t in tokens]
-    total = list()
     
+    g = github_access(tokens)
+    
+    dict_count = lambda value, dictionaries: sum([list(d.values()).count(value) for d in dictionaries])
+    
+    total = []
     for full_name in full_name_repo_ls:
+        if not g.check_limit(6):
+            break
+        
         # Getting repository as Repository instance 
-        repo = g.get_repo(full_name)
+        repo = g.access.get_repo(full_name)
         
         # Gettings integrated pulls requests list and how many pulls were not
         pulls, not_merged_pr_count = get_integrated_pulls(repo, show_not_merged=True)
         
-        if len(pulls)*2 < g.rate_limiting[0]:
-            pull_analyses = []
-            for pull in pulls:
-                pull_analysis = {
-                    'merged_commit_sha': pull.merge_commit_sha,
-                    'base_sha': pull.base.sha,
-                    'date': pull.merged_at,
-                    'merge_or_rebase': 'rebase' if is_rebase(repo, pull) else 'merge'
-                }
-                pull_analyses.append(pull_analysis)
-                if len(pull_analyses) >= 200:
-                    break
+        if not g.check_limit(400):  # len(pulls)*2 if you want analyse all pulls
+            breakpoint
+        
+        pull_analyses = []
+        for pull in pulls:
+            pull_analysis = {
+                'merged_commit_sha': pull.merge_commit_sha,
+                'base_sha': pull.base.sha,
+                'date': pull.merged_at,
+                'merge_or_rebase': is_rebase(repo, pull)  # rebase, merge, unknown
+            }
             
-            total.append({
-                'full_name': full_name,
-                'total_merges': sum(map(lambda x: int('merge' in x.values()), pull_analyses)),
-                'total_rebases': sum(map(lambda x: int('rebase' in x.values()), pull_analyses)),
-                'total_not_merged_pr': not_merged_pr_count
-            })
-            output_repo(full_name, pull_analyses)
-        else:
-            resettime = g.rate_limiting_resettime
-            formatedresettime = strftime('%Y-%m-%d %H:%M:%S', localtime(resettime))
-            print(f'Limit reached. Do you want to wait until the reset time ({formatedresettime}) or exit?')
-            print('1. Wait')
-            print('2. Exit')
-            while True:
-                o = input('')
-                if o == 1:
-                    sleep((resettime-mktime(now())))
-                    break
-                elif o == 2:
-                    exit()
+            pull_analyses.append(pull_analysis)
+        
+        total.append({
+            'full_name': full_name,
+            'total_merges': dict_count('merge', pull_analyses),
+            'total_rebases': dict_count('rebase', pull_analyses),
+            'total_commit_not_found': dict_count('unknown', pull_analyses),
+            'total_not_merged_pr': not_merged_pr_count
+        })
+        output_repo(full_name, pull_analyses)
 
     output_total(total)
 
