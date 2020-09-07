@@ -16,7 +16,7 @@ Or clone it on [Github](https://github.com/PyGithub/PyGithub).
 
 It cab be used a script or as a lib in another projects. You will need use a github [personal access token](https://github.com/settings/tokens) if you want to analyze private repository that  require authentication or many repositories at once, because as the Github API imposes a lower hourly request limit without the token. (60/hour without a token and 5000/hour with a token) 
 
-> Note: This program currently makes 6 + 2 * n requests at Github API per repository. (n = Amount closed pull-requests. And per standard, in this program there is a limit of 200 pull requests per repository.
+> Note: This program currently makes 6 + 2 * n requests at Github API per repository. (n = Amount closed pull-requests. And per standard, in this program there is a limit of 200 pull requests per repository.)
 
 ### **Inputting method**
 

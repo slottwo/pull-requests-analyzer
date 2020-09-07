@@ -1,0 +1,10 @@
+repository,total_merges,total_rebases,total_unknown,total_not_merged_pull_requests
+neovim/neovim,110,90,0,1
+antirez/redis,72,128,0,3
+git/git,16,1,183,8
+SamyPesse/How-to-Make-a-Computer-Operating-System,32,0,22,0
+scikit-learn/scikit-learn,35,165,0,1
+php/php-src,199,1,0,0
+ggreer/the_silver_searcher,179,5,16,1
+libgdx/libgdx,124,76,0,2
+irungentoo/toxcore,129,4,67,0

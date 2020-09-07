@@ -5,10 +5,10 @@ from time import sleep, strftime, mktime, localtime, time as now
 
 class github_access:
     def __init__(self, tokens: list, wait=False):
-        self.tokens = tokens
+        self.tokens = tokens if len(tokens) > 0 else [None]
         self.index = 0
-        self.access = github.Github(tokens[0])
-        self.usable_tokens = [bool(github.Github(t).rate_limiting[0]) for t in tokens] 
+        self.access = github.Github(self.tokens[0])
+        self.usable_tokens = [bool(github.Github(t).rate_limiting[0]) for t in self.tokens] 
         self.wait = wait
 
     
@@ -42,17 +42,27 @@ def input_file(file_name: str):
     
     Returns:
         tuple[list[str], list]: A token to access the Github API and a list of repositories to be analyzed
-    """        
+    """
+    try:
+        with open('tokens.csv', newline='') as file:
+            reader = list(csv.reader(file))
+            tokens = [x[0] for x in reader]
+    except FileNotFoundError:
+        try:
+            temp = open('tokens.csv', 'w+', newline='')
+            del temp 
+            input_file(file_name)
+        except:
+            print('Could not create a tokens.csv file')
+            tokens = [None]
+    
+    
     try:
         with open(file_name + '.csv', newline='') as file:
             reader = list(csv.reader(file))
             full_name_repo_ls = [x[0] for x in reader]
-            
-        with open('tokens.csv', 'w', newline='') as file:  # w flag used to create a new file if there is no
-            reader = list(csv.reader(file))
-            tokens = [x[0] for x in reader]
     except FileNotFoundError:
-        print(f'Error: Input file ({file_name}) not found! See <https://github.com/slottwo/pull-request-analyzer> to more information.')
+        print(f'Error: Input file not found! See <https://github.com/slottwo/pull-request-analyzer> to more information.')
         exit()
     except:
         print('Unexpected error:', exc_info()[0])
@@ -71,7 +81,7 @@ def csv_output(file_name: str, title_row: list, new_rows: list):
     """
     old_rows = []
 
-    with open(file_name + '.csv', 'w', newline='') as file:
+    with open(file_name + '.csv', 'w+', newline='') as file:
         # Reading
         reader = csv.reader(file)
         if reader.line_num != 0:  # Checks whether the file is not empty
@@ -106,7 +116,7 @@ def output_total(total_ls: list):
         total_ls (list[dict]): A list of dict with all analyzed repositories and your respective number total of merges, rebases and not merged pull requests
     """
     file_name = 'total_analysis'
-    title_row = ['repository','total_merges','total_rebases','total_not_merged_pull_requests']
+    title_row = ['repository','total_merges','total_rebases','total_unknown','total_not_merged_pull_requests']
     new_rows = list(map(lambda d: d.values(), total_ls))
     csv_output(file_name, title_row, new_rows)
 
@@ -134,6 +144,8 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
             integrated_pulls.append(pull)
         else:
             not_merged_count += 1
+        if len(integrated_pulls) == 200:
+            break
     if show_not_merged:
         return integrated_pulls, not_merged_count
     return integrated_pulls
@@ -157,19 +169,19 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
         return 'rebase' if len(commit.commit.parents) == 1 else 'merge'
 
 
-def wait(g: github_access):
-    resettime = g.rate_limiting_resettime
-    formatedresettime = strftime('%Y-%m-%d %H:%M:%S', localtime(resettime))
-    print(f'Limit reached. Do you want to wait until the reset time ({formatedresettime}) or exit?')
-    print('1. Wait')
-    print('2. Exit')
-    while True:
-        o = input('')
-        if o == 1:
-            sleep((resettime-mktime(now())))
-            break
-        elif o == 2:
-            exit()
+# def wait(g: github_access):
+#     resettime = g.rate_limiting_resettime
+#     formatedresettime = strftime('%Y-%m-%d %H:%M:%S', localtime(resettime))
+#     print(f'Limit reached. Do you want to wait until the reset time ({formatedresettime}) or exit?')
+#     print('1. Wait')
+#     print('2. Exit')
+#     while True:
+#         o = input('')
+#         if o == 1:
+#             sleep((resettime-mktime(now())))
+#             break
+#         elif o == 2:
+#             exit()
 
 
 def main():
@@ -181,7 +193,7 @@ def main():
     
     total = []
     for full_name in full_name_repo_ls:
-        if not g.check_limit(6):
+        if not g.check_limit(406):
             break
         
         # Getting repository as Repository instance 
@@ -190,8 +202,8 @@ def main():
         # Gettings integrated pulls requests list and how many pulls were not
         pulls, not_merged_pr_count = get_integrated_pulls(repo, show_not_merged=True)
         
-        if not g.check_limit(400):  # len(pulls)*2 if you want analyse all pulls
-            breakpoint
+        # if not g.check_limit(400):  # len(pulls)*2 if you want analyse all pulls
+        #     break
         
         pull_analyses = []
         for pull in pulls:
@@ -204,6 +216,8 @@ def main():
             
             pull_analyses.append(pull_analysis)
         
+        output_repo(full_name, pull_analyses)
+        
         total.append({
             'full_name': full_name,
             'total_merges': dict_count('merge', pull_analyses),
@@ -211,7 +225,6 @@ def main():
             'total_commit_not_found': dict_count('unknown', pull_analyses),
             'total_not_merged_pr': not_merged_pr_count
         })
-        output_repo(full_name, pull_analyses)
 
     output_total(total)
 
