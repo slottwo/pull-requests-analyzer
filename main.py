@@ -90,20 +90,21 @@ def csv_output(file_name: str, title_row: list, new_rows: list):
         title_row (list): Row with the label of each column
         new_rows (list): New rows to be added
     """
-    old_rows = []
+    # Reading
+    old_rows = []  # Because 'w+' clear the file
+    try:
+        with open(file_name+'.csv', newline='') as file: # Reading without clear it
+            reader = csv.reader(file)
+            if reader.line_num != 0:  # Checks whether the file is not empty
+                old_rows = list(reader)[1:]  # This is to not exclude them
+    except FileExistsError:
+        pass
 
+    # Writing
     with open(file_name + '.csv', 'w+', newline='') as file:
-        # Reading
-        reader = csv.reader(file)
-        if reader.line_num != 0:  # Checks whether the file is not empty
-            old_rows = list(reader)[1:]  # This is to not exclude them
-        # Writing
         writer = csv.writer(file)
-        writer.writerow(title_row)
-        rows = old_rows[:]  # Copy old_rows elements to rows
-        for row in new_rows: # This is if there are repeated lines
-            if not row in old_rows:
-                rows.append(row)
+        writer.writerow(title_row)  # Title
+        rows = old_rows[:] + new_rows
         writer.writerows(rows)
 
 
@@ -148,6 +149,7 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
     #     return pulls
     # return pulls, len(filter(lambda pull: pull.merged_at == None, repository.get_pulls(state='closed')))
     closed_pulls = list(repository.get_pulls(state='closed'))
+    print(f'Closed pulls getted ({len(closed_pulls)})')
     integrated_pulls = list()
     not_merged_count = 0
     for pull in closed_pulls:
@@ -157,6 +159,7 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
             not_merged_count += 1
         if len(integrated_pulls) == 200:
             break
+    print(f'Pulls were filtered ({len(integrated_pulls)})')
     if show_not_merged:
         return integrated_pulls, not_merged_count
     return integrated_pulls
@@ -199,21 +202,26 @@ def main():
     tokens, full_name_repo_ls = input_file('repositories')
     
     g = GithubAccess(tokens)
-    
+    print('Github API accessed')
     dict_count = lambda value, dictionaries: sum([list(d.values()).count(value) for d in dictionaries])
     
     total = []
     for full_name in full_name_repo_ls:
         if not g.check_limit(401):  # get_repo: 1, get_integrated_pulls: ~200, is_rebase: 200 or less
             break
+        print(f'Checked limit ({g.access.rate_limiting[0]})')
         
         # Getting repository as Repository instance 
         repo = g.access.get_repo(full_name)
+        print(f'Repository {full_name} were getted')
+        
         # Gettings integrated pulls requests list and how many pulls were not
         pulls, not_merged_pr_count = get_integrated_pulls(repo, show_not_merged=True)
+        print(f'Integrated pulls were getted')
         
         if not g.check_limit(len(pulls)):  # This is in case it took more than 200 requests to generate the pulls and, if so, if there are still enough requests in the GithubAccess to be able to exchange the token (if any) or leave
             break
+        print(f'Checked limit ({g.access.rate_limiting[0]})')
         
         pull_analyses = []
         for pull in pulls:
@@ -226,7 +234,11 @@ def main():
             
             pull_analyses.append(pull_analysis)
         
+        print('Pulls were analyzed')
+        
         output_repo(full_name, pull_analyses)
+        
+        print('Repository output were finalized')
         
         total.append({
             'full_name': full_name,
@@ -236,7 +248,7 @@ def main():
             'total_not_merged_pr': not_merged_pr_count
         })
 
-    output_total(total)
+        output_total(total)
 
 
 if __name__ == "__main__":
