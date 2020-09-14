@@ -3,7 +3,7 @@ import csv  # To manage the input and output
 from sys import exc_info
 from time import sleep, strftime, mktime, localtime, time as now
 
-class github_access:
+class GithubAccess:
     def __init__(self, tokens: list, wait=False):
         self.tokens = tokens if len(tokens) > 0 else [None]
         self.index = 0
@@ -68,6 +68,17 @@ def input_file(file_name: str):
         print('Unexpected error:', exc_info()[0])
         print('Please report in: <https://github.com/slottwo/pull-requests-analyzer/issues>.')
         exit()
+    
+    try:
+        with open('total_analysis.csv', newline='') as file:
+            reader = list(csv.reader(file))[1:]
+            fn_repo_ls_analyzed = {x[0] for x in reader}
+            full_name_repo_ls = set(full_name_repo_ls) - fn_repo_ls_analyzed
+    except FileNotFoundError:
+        pass
+    except:
+        print('Could not open total_analysis.csv file')
+    
     return tokens, full_name_repo_ls
 
 
@@ -169,7 +180,7 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
         return 'rebase' if len(commit.commit.parents) == 1 else 'merge'
 
 
-# def wait(g: github_access):
+# def wait(g: GithubAccess):
 #     resettime = g.rate_limiting_resettime
 #     formatedresettime = strftime('%Y-%m-%d %H:%M:%S', localtime(resettime))
 #     print(f'Limit reached. Do you want to wait until the reset time ({formatedresettime}) or exit?')
@@ -187,23 +198,22 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
 def main():
     tokens, full_name_repo_ls = input_file('repositories')
     
-    g = github_access(tokens)
+    g = GithubAccess(tokens)
     
     dict_count = lambda value, dictionaries: sum([list(d.values()).count(value) for d in dictionaries])
     
     total = []
     for full_name in full_name_repo_ls:
-        if not g.check_limit(406):
+        if not g.check_limit(401):  # get_repo: 1, get_integrated_pulls: ~200, is_rebase: 200 or less
             break
         
         # Getting repository as Repository instance 
         repo = g.access.get_repo(full_name)
-        
         # Gettings integrated pulls requests list and how many pulls were not
         pulls, not_merged_pr_count = get_integrated_pulls(repo, show_not_merged=True)
         
-        # if not g.check_limit(400):  # len(pulls)*2 if you want analyse all pulls
-        #     break
+        if not g.check_limit(len(pulls)):  # This is in case it took more than 200 requests to generate the pulls and, if so, if there are still enough requests in the GithubAccess to be able to exchange the token (if any) or leave
+            break
         
         pull_analyses = []
         for pull in pulls:
