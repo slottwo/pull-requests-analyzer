@@ -7,6 +7,7 @@ class GithubAccess:
     def __init__(self, tokens: list, wait=False):
         self.tokens = tokens if len(tokens) > 0 else [None]
         self.index = 0
+        print(f'Setting token to: {self.tokens[0]}')
         self.access = github.Github(self.tokens[0])
         self.usable_tokens = [bool(github.Github(t).rate_limiting[0]) for t in self.tokens] 
         self.wait = wait
@@ -16,22 +17,31 @@ class GithubAccess:
         self.access = github.Github(self.tokens[self.index])
 
     
-    def next_access(self):
-        self.index = (self.index + 1) % len(self.tokens)
+    def update_tokens(self, api_requests: int):
+        self.usable_tokens = [github.Github(t).rate_limiting[0] > api_requests for t in self.tokens]
+    
 
+    def next_token(self):
+        try:
+            self.index = self.usable_tokens[self.index:].index(True)
+            print(f'Changing token to: {self.tokens[self.index]}')
+            self.regenerate()
+            return True
+        except ValueError:
+            return False
+        
 
     def check_limit(self, api_requests: int):
-        self.regenerate()
-        if self.access.rate_limiting[0] > api_requests:
-            self.usable_tokens[self.index] = True
+        self.update_tokens(api_requests)
+        if self.usable_tokens[self.index] == True:
             return True
-        if True in self.usable_tokens:
-            self.usable_tokens[self.index] = False
-            self.next_access()
-            self.check_limit(api_requests)
-        elif self.wait:
-            sleep(self.access.rate_limiting_resettime-now())
-            self.usable_tokens = [bool(github.Github(t).rate_limiting[0]) for t in self.tokens]
+        if self.next_token():
+            return True
+        if self.wait:
+            timeskip = self.access.rate_limiting_resettime-now()
+            print(f'Waitting: {timeskip//3600}h{timeskip%3600//60}min{timeskip%3600%60}s')
+            sleep(timeskip)
+            self.usable_tokens = [True]*len(self.usable_tokens)
             return True
         else:
             return False
@@ -43,10 +53,11 @@ def input_file(file_name: str):
     Returns:
         tuple[list[str], list]: A token to access the Github API and a list of repositories to be analyzed
     """
+    # Taking tokens
     try:
         with open('tokens.csv', newline='') as file:
             reader = list(csv.reader(file))
-            tokens = [x[0] for x in reader]
+            tokens = {x[0] for x in reader}
     except FileNotFoundError:
         try:
             temp = open('tokens.csv', 'w+', newline='')
@@ -56,11 +67,10 @@ def input_file(file_name: str):
             print('Could not create a tokens.csv file')
             tokens = [None]
     
-    
     try:
-        with open(file_name + '.csv', newline='') as file:
+        with open(file_name, newline='') as file:
             reader = list(csv.reader(file))
-            full_name_repo_ls = [x[0] for x in reader]
+            full_name_repo_ls = {x[0] for x in reader}
     except FileNotFoundError:
         print(f'Error: Input file not found! See <https://github.com/slottwo/pull-request-analyzer> to more information.')
         exit()
@@ -69,17 +79,19 @@ def input_file(file_name: str):
         print('Please report in: <https://github.com/slottwo/pull-requests-analyzer/issues>.')
         exit()
     
+    # Taking repositories already analyzed and subtracting the ready from the new
     try:
-        with open('total_analysis.csv', newline='') as file:
-            reader = list(csv.reader(file))[1:]
-            fn_repo_ls_analyzed = {x[0] for x in reader}
-            full_name_repo_ls = set(full_name_repo_ls) - fn_repo_ls_analyzed
+        file = open('total_analysis.csv', newline='')
+        reader = csv.reader(file)
     except FileNotFoundError:
-        pass
+        print('Could not find total_analysis.csv file')
     except:
         print('Could not open total_analysis.csv file')
+    else:
+        fn_repo_ls_analyzed = {x[0] for x in list(reader)[1:]}
+        full_name_repo_ls = full_name_repo_ls - fn_repo_ls_analyzed
     
-    return tokens, full_name_repo_ls
+    return list(tokens), list(full_name_repo_ls)
 
 
 def csv_output(file_name: str, title_row: list, new_rows: list):
@@ -94,12 +106,12 @@ def csv_output(file_name: str, title_row: list, new_rows: list):
     old_rows = []  # Because 'w+' clear the file
     try:
         with open(file_name+'.csv', newline='') as file: # Reading without clear it
-            reader = csv.reader(file)
-            if reader.line_num != 0:  # Checks whether the file is not empty
-                old_rows = list(reader)[1:]  # This is to not exclude them
-    except FileExistsError:
+            reader = list(csv.reader(file))
+            if len(reader) != 0:  # Checks whether the file is not empty
+                old_rows = reader[1:]  # This is to not exclude them
+    except FileNotFoundError:
         pass
-
+    
     # Writing
     with open(file_name + '.csv', 'w+', newline='') as file:
         writer = csv.writer(file)
@@ -144,11 +156,11 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
         list[PullRequest]: A list of PullRequests that have been integrated
         int (optional): Number of non-integrated pull requests
     """
-    # pulls = list(filter(lambda pull: pull.merged_at != None, repository.get_pulls(state='closed')))
+    closed_pulls = list(repository.get_pulls(state='closed'))
+    # pulls = list(filter(lambda pull: pull.merged_commit_at != None, closed_pulls))
     # if show_not_merged:
     #     return pulls
-    # return pulls, len(filter(lambda pull: pull.merged_at == None, repository.get_pulls(state='closed')))
-    closed_pulls = list(repository.get_pulls(state='closed'))
+    # return pulls, len(closed_pulls) - len(pulls)
     print(f'Closed pulls getted ({len(closed_pulls)})')
     integrated_pulls = list()
     not_merged_count = 0
@@ -159,7 +171,7 @@ def get_integrated_pulls(repository: github.Repository.Repository, show_not_merg
             not_merged_count += 1
         if len(integrated_pulls) == 200:
             break
-    print(f'Pulls were filtered ({len(integrated_pulls)})')
+    print(f'Pulls were filtered (integrated: {len(integrated_pulls)}, not_merged: {not_merged_count})')
     if show_not_merged:
         return integrated_pulls, not_merged_count
     return integrated_pulls
@@ -183,31 +195,15 @@ def is_rebase(repo: github.Repository.Repository, pull: github.PullRequest.PullR
         return 'rebase' if len(commit.commit.parents) == 1 else 'merge'
 
 
-# def wait(g: GithubAccess):
-#     resettime = g.rate_limiting_resettime
-#     formatedresettime = strftime('%Y-%m-%d %H:%M:%S', localtime(resettime))
-#     print(f'Limit reached. Do you want to wait until the reset time ({formatedresettime}) or exit?')
-#     print('1. Wait')
-#     print('2. Exit')
-#     while True:
-#         o = input('')
-#         if o == 1:
-#             sleep((resettime-mktime(now())))
-#             break
-#         elif o == 2:
-#             exit()
-
-
 def main():
-    tokens, full_name_repo_ls = input_file('repositories')
+    tokens, full_name_repo_ls = input_file('repositories.csv')
     
-    g = GithubAccess(tokens)
+    g = GithubAccess(tokens, wait=True)
     print('Github API accessed')
     dict_count = lambda value, dictionaries: sum([list(d.values()).count(value) for d in dictionaries])
     
-    total = []
     for full_name in full_name_repo_ls:
-        if not g.check_limit(401):  # get_repo: 1, get_integrated_pulls: ~200, is_rebase: 200 or less
+        if not g.check_limit(401):  # get_repo: 1, get_integrated_pulls: ~200, is_rebase: 2*(200 or less)
             break
         print(f'Checked limit ({g.access.rate_limiting[0]})')
         
@@ -240,15 +236,13 @@ def main():
         
         print('Repository output were finalized')
         
-        total.append({
-            'full_name': full_name,
-            'total_merges': dict_count('merge', pull_analyses),
-            'total_rebases': dict_count('rebase', pull_analyses),
-            'total_commit_not_found': dict_count('unknown', pull_analyses),
-            'total_not_merged_pr': not_merged_pr_count
-        })
-
-        output_total(total)
+        total = {'full_name': full_name, 
+                 'total_merges': dict_count('merge', pull_analyses), 
+                 'total_rebases': dict_count('rebase', pull_analyses), 
+                 'total_commit_not_found': dict_count('unknown', pull_analyses), 
+                 'total_not_merged_pr': not_merged_pr_count}
+        
+        output_total([total])
 
 
 if __name__ == "__main__":
