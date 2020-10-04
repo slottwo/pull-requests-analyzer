@@ -6,9 +6,11 @@ This project is under development, and may gain new features or change drastical
 
 ## **Requirements**
 
-This script uses [Python 3.x](https://www.python.org/) and [Github API v3](https://developer.github.com/v3/) through the Python library [PyGithub](https://pygithub.readthedocs.io/en/latest/introduction.html). To install it use:
+This script uses [Python 3.x](https://www.python.org/), [Github API v3](https://developer.github.com/v3/) through the Python library [PyGithub](https://pygithub.readthedocs.io/en/latest/introduction.html) and [Pandas](https://pandas.pydata.org/). To install these libs use:
 
-```$ pip install PyGithub```
+```$ pip3 install PyGithub```
+
+```$ pip3 install pandas```
 
 Or clone it on [Github](https://github.com/PyGithub/PyGithub).
 
